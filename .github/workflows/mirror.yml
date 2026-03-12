@@ -1,0 +1,48 @@
+name: Mirror Feuerwehr Einsätze
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Repo auschecken
+        uses: actions/checkout@v4
+
+      - name: JSON herunterladen
+        run: |
+          curl -L --fail --connect-timeout 20 --max-time 60 \
+            -A "Mozilla/5.0 (compatible; FeuerwehrMirror/1.0)" \
+            "https://einsatzuebersicht.lfv.steiermark.at/einsatzkarte/data/private_168.json" \
+            -o current.new.json
+
+      - name: JSON prüfen
+        run: |
+          python - <<'PY'
+          import json
+          with open("current.new.json","r",encoding="utf-8") as f:
+              data=json.load(f)
+          assert isinstance(data,dict)
+          assert "features" in data
+          print("Features:",len(data["features"]))
+          PY
+
+      - name: Datei ersetzen
+        run: mv current.new.json current.json
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add current.json
+          git diff --cached --quiet || git commit -m "Update Einsatzdaten"
+
+      - name: Push
+        run: git push
